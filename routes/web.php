@@ -1,7 +1,8 @@
 <?php
 
 use App\Http\Controllers\CommonController;
-use App\Http\Controllers\MessageController;
+use App\Http\Controllers\FriendController;
+use App\Http\Controllers\GroupController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -24,13 +25,15 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/friends', [CommonController::class, 'friends'])->name('friends');
 
-    Route::get('/messages/friend/{id}', [MessageController::class, 'friends'])->name('message.friends');
+    Route::get('/friend/{id}/messages', [FriendController::class, 'messages'])->name('friend.messages');
 
-    Route::post('/messages/friend/{id}', [MessageController::class, 'friend'])->name('message.friend');
+    Route::post('/friend/{id}/message', [FriendController::class, 'message'])->name('friend.message');
 
-    Route::get('/messages/group/{id}', [MessageController::class, 'groups'])->name('message.groups');
+    Route::get('/group/{id}/messages', [GroupController::class, 'messages'])->name('group.messages');
 
-    Route::post('/messages/group/{id}', [MessageController::class, 'group'])->name('message.group');
+    Route::post('/group/{id}/message', [GroupController::class, 'message'])->name('group.message');
+
+    Route::post('/group/create', [GroupController::class, 'create'])->name('group.create');
 });
 
 Route::middleware('auth')->group(function () {

@@ -62,10 +62,15 @@ class CommonController extends Controller
             ->where('friend_id', $friend_id)
             ->firstOrNew();
 
+        $chat->user_id = Auth::id();
+        $chat->group_id = $group_id;
+        $chat->friend_id = $friend_id;
         $chat->deleted_at = null;
         $chat->save();
+        $chat->friend;
+        $chat->group;
 
-        return response()->json();
+        return $chat;
     }
 
     public function friends(Request $request)

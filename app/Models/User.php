@@ -79,13 +79,4 @@ class User extends Authenticatable
         return $this->belongsToMany(Group::class, 'group_members', 'user_id', 'group_id')
             ->withTimestamps();
     }
-
-    /**
-     * @param $value
-     * @return string
-     */
-    public function getAvatarAttribute($value): string
-    {
-        return empty($value) ? '/assets/default_avatar.png' : $value;
-    }
 }

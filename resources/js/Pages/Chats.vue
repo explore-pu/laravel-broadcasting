@@ -19,26 +19,30 @@
                             </button>
                         </div>
 
-                        <template v-for="chat in chats">
-                            <button class="h-14 p-4 w-full hover:bg-gray-50 flex items-center relative"
-                                    :data-friend="chat.friend.id" v-if="chat.friend !== null"
-                                    @click="friendTarget($event, chat.friend)">
-                                <img :src="chat.friend.avatar" alt="avatar" class="h-9">
+                        <template v-for="chat in chats" :key="chat.id">
+                            <button class="h-14 p-4 w-full flex items-center relative hover:bg-gray-50"
+                                    :ref="(el) => chatRefs[chat.id] = el"
+                                    @click="friendTarget(chat)"
+                                    v-if="chat.friend !== null"
+                            >
+                                <img :src="friendAvatar(chat.friend.avatar)" alt="avatar" class="h-9">
                                 <span class="ml-2 line-clamp-1" :title="chat.friend.name">{{ chat.friend.name }}</span>
                                 <IconCircle class="z-10 w-3 h-3 text-red-600 absolute top-1 left-11 hidden"/>
                             </button>
-                            <button class="h-14 p-4 w-full hover:bg-gray-50 flex items-center relative"
-                                    :data-group="chat.group.id" v-else-if="chat.group !== null"
-                                    @click="groupTarget($event, chat.group)">
-                                <img :src="chat.group.avatar" alt="avatar" class="h-9">
+                            <button class="h-14 p-4 w-full flex items-center relative hover:bg-gray-50"
+                                    :ref="(el) => chatRefs[chat.id] = el"
+                                    @click="groupTarget(chat)"
+                                    v-else-if="chat.group !== null"
+                            >
+                                <img :src="groupAvatar(chat.group.avatar)" alt="avatar" class="h-9">
                                 <span class="ml-2 line-clamp-1" :title="chat.group.name">{{ chat.group.name }}</span>
                                 <IconCircle class="z-10 w-3 h-3 text-red-600 absolute top-1 left-11 hidden"/>
                             </button>
                         </template>
                     </div>
-                    <div class="box w-full relative hidden">
+                    <div class="w-full relative" v-show="loading">
                         <div class="header w-full h-14 absolute top-0 border-b p-5 bg-white flex items-baseline z-10">
-                            <div class="receiver-name"></div>
+                            <div ref="receiverRef"></div>
                             <div class="text-xs text-gray-700 ml-2" v-if="isFriendTyping">Typing...</div>
                         </div>
                         <div ref="messagesContainer" class="mt-16 p-2 h-140 overflow-auto">
@@ -85,13 +89,16 @@
                         <input type="text" class="h-8 w-full text-sm text-gray-300 border-gray-300 rounded" placeholder="搜索" />
                     </div>
                     <div class="overflow-auto h-120">
-                        <template v-for="friend in searchFriends" :key="friend.id">
-                            <div class="friend flex items-center gap-2 px-6 py-2 hover:bg-gray-300" @click="selectMember">
-                                <input type="checkbox" class="rounded-full" :value="friend.id" @change="changeMember">
-                                <img class="h-9" :src="friend.avatar" alt="">
-                                <span class="line-clamp-1">{{ friend.name }}</span>
-                            </div>
-                        </template>
+                        <div class="flex items-center gap-2 px-6 py-2 hover:bg-gray-300"
+                             :ref="(el) => friendRefs[friend.id] = el"
+                             @click="selectMember($event, friend.id)"
+                             v-for="friend in searchFriends"
+                             :key="friend.id"
+                        >
+                            <input type="checkbox" class="rounded-full" :value="friend.id" @change="changeMember">
+                            <img class="h-9" :src="friendAvatar(friend.avatar)" alt="">
+                            <span class="line-clamp-1">{{ friend.name }}</span>
+                        </div>
                     </div>
                 </div>
                 <div class="px-6">
@@ -104,7 +111,7 @@
                             <template v-for="checkedFriend in checkedFriends" :key="checkedFriend.id">
                                 <div class="w-full flex justify-center">
                                     <div class="h-24 w-14 m-1 flex flex-col items-center relative">
-                                        <img :src="checkedFriend.avatar" alt="avatar" class="h-14">
+                                        <img :src="friendAvatar(checkedFriend.avatar)" alt="avatar" class="h-14">
                                         <p class="flex-none line-clamp-1 text-xs" >{{ checkedFriend.name }}</p>
                                         <button class="absolute -top-1 -right-1 bg-gray-300 rounded-full" @click="deleteMember(checkedFriend.id)">
                                             <IconXmark class="w-4 h-4 p-0.5"/>
@@ -117,11 +124,11 @@
                     <div class="flex justify-around py-4">
                         <button type="button" class="px-8 py-1"
                                 :class="checkedFriends.length === 0 ? 'bg-gray-200 text-gray-400' : 'bg-green-500 text-white'"
-                                :disabled="checkedFriends.length === 0" @click="showDialog = false"
+                                :disabled="checkedFriends.length === 0" @click="doneMembers"
                         >
                             完成
                         </button>
-                        <button type="button" class="px-8 py-1 bg-gray-200 text-green-500" @click="showDialog = false">取消</button>
+                        <button type="button" class="px-8 py-1 bg-gray-200 text-green-500" @click="cancelMembers">取消</button>
                     </div>
                 </div>
             </div>
@@ -130,13 +137,15 @@
 </template>
 
 <script setup>
-import {nextTick, onMounted, ref, watch} from "vue";
+import {nextTick, onMounted, ref, watch, computed} from "vue";
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import {Head} from '@inertiajs/vue3';
+import {Head, router} from '@inertiajs/vue3';
 import IconCircle from "@/Components/Icons/icon-circle.vue";
 import IconXmark from "@/Components/Icons/icon-xmark.vue";
 import IconPlus from "@/Components/Icons/icon-plus.vue";
 import Dialog from "@/Components/Dialog.vue";
+import DefaultFriendAvatar from "@/Assets/defaultAvatar.png";
+import DefaultGroupAvatar from "@/Assets/defaultGroup.jpg";
 
 const props = defineProps({
     chats: {
@@ -149,15 +158,19 @@ const props = defineProps({
     },
 });
 
+const loading = ref(false);
+const chatRefs = ref([]);
+const receiverRef = ref();
+const friendRefs = ref([]);
+
 const chats = ref(props.chats);
 const messages = ref([]);
 const message = ref("");
-const currentMessages = ref({});
+const currentChat = ref({});
 const messagesContainer = ref(null);
 const isFriendTyping = ref(false);
 const isFriendTypingTimer = ref(null);
-const chatType = localStorage.getItem('chatType');
-const chatId = localStorage.getItem('chatId');
+const localChat = ref(localStorage.getItem('chat'));
 const showDialog = ref(false);
 const friends = ref([]);
 const searchFriends = ref([]);
@@ -176,12 +189,20 @@ watch(
     {deep: true}
 );
 
-const sendMessage = (event) => {
-    // 阻止默认行为并防止换行
-    event.preventDefault();
+const friendAvatar = computed(() => (src) => {
+    return src ?? DefaultFriendAvatar;
+});
 
+const groupAvatar = computed(() => (src) => {
+    return src ?? DefaultGroupAvatar;
+});
+
+const sendMessage = (event) => {
     if (message.value.trim() !== "") {
-        axios.post(`/messages/${currentMessages.type}/${currentMessages.receiver.id}`, {message: message.value}).then((response) => {
+        const type = currentChat.value.group !== null ? 'group' : 'friend';
+        const receiverId = currentChat.value.group !== null ? currentChat.value.group_id : currentChat.value.friend_id;
+
+        axios.post(`/${type}/${receiverId}/message`, {message: message.value}).then((response) => {
             messages.value.push(response.data);
             message.value = "";
         });
@@ -189,63 +210,47 @@ const sendMessage = (event) => {
 };
 
 const sendTypingEvent = () => {
-    if (currentMessages.type === 'friend') {
-        Echo.private(`friend.${currentMessages.receiver.id}`).whisper("typing", {
-            type: currentMessages.type,
+    if (currentChat.value.friend !== null) {
+        Echo.private(`friend.${currentChat.value.friend_id}`).whisper("typing", {
             user_id: props.auth.user.id,
-            friend_id: currentMessages.receiver.id,
+            friend_id: currentChat.value.friend_id,
         });
     }
 };
 
-const toggleTarget = (event) => {
-    const boxDom = document.querySelector('.box.hidden');
-    if (boxDom !== null) {
-        boxDom.classList.remove('hidden');
+const toggleTarget = (chat) => {
+    loading.value = true;
+
+    if (chatRefs.value[localChat.value]) {
+        chatRefs.value[localChat.value].classList.remove('bg-gray-200');
+        chatRefs.value[localChat.value].classList.add('hover:bg-gray-50');
     }
 
-    const activeChatDom = document.querySelector('button.bg-gray-200');
-    if (activeChatDom !== null) {
-        activeChatDom.classList.remove('bg-gray-200');
-        activeChatDom.classList.add('hover:bg-gray-50');
-    }
+    chatRefs.value[chat.id].classList.add('bg-gray-200');
+    chatRefs.value[chat.id].classList.remove('hover:bg-gray-50');
+    chatRefs.value[chat.id].lastChild.classList.add('hidden');
 
-    event.target.classList.add('bg-gray-200');
-    event.target.classList.remove('hover:bg-gray-50');
-    event.target.lastChild.classList.add('hidden');
+    localStorage.setItem('chat', chat.id);
+    localChat.value = chat.id;
+    currentChat.value = chat;
 }
 
-const friendTarget = (event, friend) => {
-    toggleTarget(event);
+const friendTarget = (chat) => {
+    toggleTarget(chat);
 
-    currentMessages.type = 'friend';
-    currentMessages.receiver = friend;
-
-    localStorage.setItem('chatType', 'friend');
-    localStorage.setItem('chatId', friend.id);
-
-    axios.get(`/messages/friend/${friend.id}`).then((response) => {
+    axios.get(`/friend/${chat.friend.id}/messages`).then((response) => {
         console.log(response);
-
-        const boxHeaderDom = document.querySelector('.receiver-name');
-        boxHeaderDom.innerText = friend.name;
+        receiverRef.value.innerText = chat.friend.name;
         messages.value = response.data.messages;
     });
 }
 
-const groupTarget = (event, group) => {
-    toggleTarget(event);
+const groupTarget = (chat) => {
+    toggleTarget(chat);
 
-    currentMessages.type = 'group';
-    currentMessages.receiver = group;
-
-    localStorage.setItem('chatType', 'group');
-    localStorage.setItem('chatId', group.id);
-
-    axios.get(`/messages/group/${group.id}`).then((response) => {
+    axios.get(`/group/${chat.group.id}/messages`).then((response) => {
         console.log(response);
-        const boxHeaderDom = document.querySelector('.receiver-name');
-        boxHeaderDom.innerText = group.name + '（' + response.data.members.length + '）';
+        receiverRef.value.innerText = chat.group.name + '（' + response.data.members.length + '）';
         messages.value = response.data.messages;
     });
 }
@@ -259,15 +264,9 @@ const newGroup = () => {
     });
 }
 
-const selectMember = (event) => {
-    let friendDom;
-    if (event.target.classList.contains('friend')) {
-        friendDom = event.target;
-    } else {
-        friendDom = event.target.parentElement;
-    }
-    if (event.target !== friendDom.firstChild) {
-        friendDom.firstChild.click();
+const selectMember = (event, id) => {
+    if (event.target !== friendRefs.value[id].firstChild) {
+        friendRefs.value[id].firstChild.click();
     }
 }
 
@@ -281,33 +280,63 @@ const changeMember = (event) => {
 }
 
 const deleteMember = (id) => {
-    document.querySelector(`.friend [value="${id}"]`).click();
+    friendRefs.value[id].firstChild.click();
+}
+
+const doneMembers = () => {
+    axios.post(`/group/create`, {members: checkedFriends.value.map(friend => ({ id: friend.id, name: friend.name }))}).then((response) => {
+        chats.value.unshift(response.data);
+        echoGroup(response.data.group_id);
+
+        cancelMembers();
+    });
+}
+
+const cancelMembers = () => {
+    showDialog.value = false;
+    searchFriends.value = [];
+    checkedFriends.value = [];
 }
 
 const echoGroup = (groupId) => {
     Echo.private(`group.${groupId}`)
         .listen("MessageGroupSent", (response) => {
-            console.log('接收的群组消息：', response.message);
-            if (currentMessages.type === 'group' && parseInt(response.message.group_id) === currentMessages.receiver.id && parseInt(response.message.user_id) !== props.auth.user.id) {
-                messages.value.push(response.message);
-            } else if (currentMessages.type !== 'group' || parseInt(response.message.group_id) !== currentMessages.receiver.id) {
-                const chatDom = document.querySelector(`[data-group="${response.message.group_id}"]`);
-                chatDom.lastChild.classList.remove('hidden');
+            console.log('MessageGroupSent:', response.message);
+
+            const chat = chats.value.filter(chat => parseInt(chat.group_id) === parseInt(response.message.group_id));
+            if (parseInt(chat[0].id) === parseInt(localChat.value)) {
+                if (parseInt(response.message.user_id) !== parseInt(props.auth.user.id)) {
+                    messages.value.push(response.message);
+                }
+                clickTarget();
+            }
+            else {
+                chatRefs.value[chat[0].id].lastChild.classList.remove('hidden');
             }
         });
+}
+
+const clickTarget = () => {
+    if (chatRefs.value[localChat.value]) {
+        chatRefs.value[localChat.value].click();
+    }
 }
 
 onMounted(() => {
     console.info('chats：', chats);
 
-    const chatDom = document.querySelector(`[data-${chatType}="${chatId}"]`);
-    if (chatDom) {
-        chatDom.click();
-    }
+    clickTarget();
 
     Echo.private(`chat.${props.auth.user.id}`)
         .listen("ChatSent", (response) => {
-            const chat = chats.value.filter(chat => chat.user_id === response.chat.user_id && (chat.friend_id === parseInt(response.chat.friend_id) || chat.group_id === parseInt(response.chat.group_id)));
+            console.info('ChatSent:', response)
+
+            const chat = chats.value.filter(chat => {
+                return chat.user_id === parseInt(response.chat.user_id) && (
+                    (chat.friend_id !== null && response.chat.friend_id !== null && parseInt(chat.friend_id) === parseInt(response.chat.friend_id)) ||
+                    (chat.group_id !== null && response.chat.group_id !== null && parseInt(chat.group_id) === parseInt(response.chat.group_id))
+                )
+            });
 
             if (chat.length === 0) {
                 chats.value.unshift(response.chat);
@@ -319,16 +348,19 @@ onMounted(() => {
 
     Echo.private(`friend.${props.auth.user.id}`)
         .listen("MessageFriendSent", (response) => {
-            console.log('接收的朋友消息：', response.message);
-            if (currentMessages.type === 'friend' && parseInt(response.message.friend_id) === props.auth.user.id && parseInt(response.message.user_id) === currentMessages.receiver.id) {
+            console.log('MessageFriendSent:', response.message);
+            const chat = chats.value.filter(chat => parseInt(chat.friend_id) === parseInt(response.message.user_id));
+
+            if (parseInt(chat[0].id) === parseInt(localChat.value)) {
                 messages.value.push(response.message);
-            } else if (currentMessages.type !== 'friend' || parseInt(response.message.user_id) !== currentMessages.receiver.id) {
-                const chatDom = document.querySelector(`[data-friend="${response.message.user_id}"]`);
-                chatDom.lastChild.classList.remove('hidden');
+                clickTarget();
+            }
+            else {
+                chatRefs.value[chat[0].id].lastChild.classList.remove('hidden');
             }
         })
         .listenForWhisper("typing", (response) => {
-            isFriendTyping.value = response.type === currentMessages.type && response.user_id === currentMessages.receiver.id && response.friend_id === props.auth.user.id;
+            isFriendTyping.value = parseInt(response.user_id) === parseInt(currentChat.value.friend_id) && parseInt(response.friend_id) === parseInt(props.auth.user.id);
 
             if (isFriendTypingTimer.value) {
                 clearTimeout(isFriendTypingTimer.value);

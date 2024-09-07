@@ -33,15 +33,6 @@ class Group extends Model
 
     public function members()
     {
-        return $this->belongsToMany(User::class, 'group_members', 'group_id', 'user_id');
-    }
-
-    /**
-     * @param $value
-     * @return string
-     */
-    public function getAvatarAttribute($value): string
-    {
-        return empty($value) ? '/assets/default_group.jpg' : $value;
+        return $this->belongsToMany(User::class, 'group_members', 'group_id', 'user_id')->withTimestamps();
     }
 }
